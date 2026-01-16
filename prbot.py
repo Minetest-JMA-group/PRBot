@@ -17,16 +17,23 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import traceback
-
+import os
 import json
 import github
 import jinja2
-from settings import GITHUB_TOKEN, MESSAGE_PATH, STATUS_FILE, REPO_NAME
 
-try:
-    from settings import AUTO_CLOSE
-except ImportError:
-    AUTO_CLOSE = False
+# Read all settings from environment variables
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+MESSAGE_PATH = os.environ.get('MESSAGE_PATH')
+STATUS_FILE = os.environ.get('STATUS_FILE')
+REPO_NAME = os.environ.get('REPO_NAME')
+AUTO_CLOSE = os.environ.get('AUTO_CLOSE', 'false').lower() == 'true'
+
+# Validate required environment variables
+required_vars = ['GITHUB_TOKEN', 'MESSAGE_PATH', 'STATUS_FILE', 'REPO_NAME']
+for var in required_vars:
+    if not os.environ.get(var):
+        raise ValueError(f"Required environment variable {var} is not set")
 
 def poll(repo, msg, status, username):
     pulls = repo.get_pulls(sort='created')

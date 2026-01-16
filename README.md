@@ -17,7 +17,7 @@ Install dependencies:
 
     pip3 install -r requirements.txt
 
-Set up configuration in settings.py:
+Set up configuration in environment:
 
 	GITHUB_TOKEN="<token here>"
 	MESSAGE_PATH="/path/to/message.md"
