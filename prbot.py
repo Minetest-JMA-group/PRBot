@@ -24,6 +24,7 @@ import jinja2
 import time
 import jwt
 import requests
+import calendar
 
 # Read all settings from environment variables
 GITHUB_APP_CLIENT_ID = os.environ.get('GITHUB_APP_CLIENT_ID')
@@ -91,11 +92,23 @@ def get_or_refresh_token(status, client_id, private_key_path, repo_name):
     """Get a valid installation token, refreshing if expired."""
     current_time = time.time()
     
-    # Check if we have a valid token
+    # Check if we have a valid token with 5-minute buffer
     if ('installation_token' in status and 
         'token_expires_at' in status and
-        time.mktime(time.strptime(status['token_expires_at'], '%Y-%m-%dT%H:%M:%SZ')) > current_time + 300):  # 5-minute buffer
-        return status['installation_token']
+        status['installation_token'] and
+        status['token_expires_at']):
+        try:
+            # Parse expiration time from ISO format
+            expires_at_str = status['token_expires_at']
+            expires_at_struct = time.strptime(expires_at_str, "%Y-%m-%dT%H:%M:%SZ")
+            expires_at_timestamp = calendar.timegm(expires_at_struct)
+            
+            # If token expires in more than 5 minutes, use it
+            if expires_at_timestamp > current_time + 300:
+                return status['installation_token']
+        except (ValueError, KeyError):
+            # If parsing fails, fall through to refresh
+            pass
     
     # Get new token
     token, expires_at = get_installation_token(client_id, private_key_path, repo_name)
@@ -143,7 +156,7 @@ def main():
     except FileNotFoundError:
         status = {}
     
-    # Ensure all required fields exist with defaults
+    # Ensure status has all required fields with defaults
     status.setdefault('pull_req_number', 0)
     status.setdefault('installation_token', None)
     status.setdefault('token_expires_at', None)
