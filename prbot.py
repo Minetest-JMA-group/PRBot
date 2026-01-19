@@ -119,7 +119,8 @@ def get_or_refresh_token(status, client_id, private_key_path, repo_name):
 
     return token
 
-def poll(repo, msg, status, username):
+def poll(repo, msg, status):
+    """Monitor pull requests and post comments."""
     pulls = repo.get_pulls(sort='created')
     threshold = status['pull_req_number']
     for pull in pulls.reversed:
@@ -134,9 +135,15 @@ def poll(repo, msg, status, username):
                 continue
 
             # Double check that we haven't posted on this before...
+            # Since we can't get the app username via /user, we'll check all comments
+            # and skip if ANY comment contains our template text
             existing_comments = pull.get_issue_comments()
-            if any([comment.user.login == username for comment in existing_comments]):
-                print(" => Existing comment detected. Skipping...")
+
+            # Check if any comment contains the same template-generated text
+            # This is a simple heuristic to avoid duplicates
+            comment_text = comment.strip()
+            if any(comment_text in c.body for c in existing_comments):
+                print(" => Similar comment detected. Skipping...")
                 continue
 
             pull.create_issue_comment(comment)
@@ -172,10 +179,10 @@ def main():
     msg = jinja2.Template(open(MESSAGE_PATH).read())
     gh = github.MainClass.Github(token)
     repo = gh.get_repo(REPO_NAME)
-    username = gh.get_user().login
-    print("Bot is posting as user: {}".format(username))
 
-    poll(repo, msg, status, username)
+    print("Bot is posting as GitHub App installation")
+
+    poll(repo, msg, status)
     json.dump(status, open(STATUS_FILE, 'w'))
 
 if __name__ == '__main__':
