@@ -44,11 +44,11 @@ def get_installation_token(client_id, private_key_path, repo_name):
     """Generate a JWT and get an installation token for the repository."""
     # Extract organization from repo name (format: org/repo)
     org_name = repo_name.split('/')[0]
-    
+
     # Read private key
     with open(private_key_path, 'r') as f:
         private_key = f.read()
-    
+
     # Generate JWT
     now = int(time.time())
     payload = {
@@ -57,43 +57,43 @@ def get_installation_token(client_id, private_key_path, repo_name):
         'iss': client_id
     }
     jwt_token = jwt.encode(payload, private_key, algorithm='RS256')
-    
+
     # Get installation ID for the organization
     headers = {
         'Accept': 'application/vnd.github+json',
         'Authorization': f'Bearer {jwt_token}',
         'X-GitHub-Api-Version': '2022-11-28'
     }
-    
+
     # Try to get organization installation
     response = requests.get(
         f'https://api.github.com/orgs/{org_name}/installation',
         headers=headers
     )
-    
+
     if response.status_code != 200:
         raise Exception(f"Failed to get installation ID: {response.status_code} - {response.text}")
-    
+
     installation_id = response.json()['id']
-    
+
     # Generate installation token
     response = requests.post(
         f'https://api.github.com/app/installations/{installation_id}/access_tokens',
         headers=headers
     )
-    
+
     if response.status_code != 201:
         raise Exception(f"Failed to get installation token: {response.status_code} - {response.text}")
-    
+
     token_data = response.json()
     return token_data['token'], token_data['expires_at']
 
 def get_or_refresh_token(status, client_id, private_key_path, repo_name):
     """Get a valid installation token, refreshing if expired."""
     current_time = time.time()
-    
+
     # Check if we have a valid token with 5-minute buffer
-    if ('installation_token' in status and 
+    if ('installation_token' in status and
         'token_expires_at' in status and
         status['installation_token'] and
         status['token_expires_at']):
@@ -102,21 +102,21 @@ def get_or_refresh_token(status, client_id, private_key_path, repo_name):
             expires_at_str = status['token_expires_at']
             expires_at_struct = time.strptime(expires_at_str, "%Y-%m-%dT%H:%M:%SZ")
             expires_at_timestamp = calendar.timegm(expires_at_struct)
-            
+
             # If token expires in more than 5 minutes, use it
             if expires_at_timestamp > current_time + 300:
                 return status['installation_token']
         except (ValueError, KeyError):
             # If parsing fails, fall through to refresh
             pass
-    
+
     # Get new token
     token, expires_at = get_installation_token(client_id, private_key_path, repo_name)
-    
+
     # Update status
     status['installation_token'] = token
     status['token_expires_at'] = expires_at
-    
+
     return token
 
 def poll(repo, msg, status, username):
@@ -155,7 +155,7 @@ def main():
         status = json.load(open(STATUS_FILE))
     except FileNotFoundError:
         status = {}
-    
+
     # Ensure status has all required fields with defaults
     status.setdefault('pull_req_number', 0)
     status.setdefault('installation_token', None)
@@ -163,12 +163,12 @@ def main():
 
     # Get or refresh installation token
     token = get_or_refresh_token(
-        status, 
-        GITHUB_APP_CLIENT_ID, 
-        GITHUB_APP_PRIVATE_KEY_PATH, 
+        status,
+        GITHUB_APP_CLIENT_ID,
+        GITHUB_APP_PRIVATE_KEY_PATH,
         REPO_NAME
     )
-    
+
     msg = jinja2.Template(open(MESSAGE_PATH).read())
     gh = github.MainClass.Github(token)
     repo = gh.get_repo(REPO_NAME)
